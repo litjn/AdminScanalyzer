@@ -1,0 +1,87 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 262 100% 34.5%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 258 26% 54%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 254 100% 94%;
+    --accent-foreground: 240 10% 3.9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 262 100% 34.5%;
+    --radius: 0.5rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    font-family: 'Inter', sans-serif;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  .dashboard-card {
+    @apply rounded-lg bg-white shadow-md border border-gray-100 p-4 hover:shadow-lg transition-all duration-300;
+  }
+
+  .purple-gradient {
+    @apply bg-gradient-to-r from-primary to-secondary;
+  }
+
+  .scanalyzer-table {
+    @apply w-full border-collapse;
+  }
+
+  .scanalyzer-table th {
+    @apply text-left py-3 px-4 bg-softGray text-gray-700 font-medium;
+  }
+
+  .scanalyzer-table td {
+    @apply py-3 px-4 border-b border-gray-100;
+  }
+
+  .scanalyzer-table tr:hover {
+    @apply bg-softGray;
+  }
+
+  .severity-normal {
+    @apply bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium;
+  }
+
+  .severity-suspicious {
+    @apply bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs font-medium;
+  }
+
+  .severity-anomaly {
+    @apply bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs font-medium;
+  }
+
+  .severity-critical {
+    @apply bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs font-medium;
+  }
+
+  .card-gradient {
+    @apply bg-gradient-to-br from-white to-softGray;
+  }
+}

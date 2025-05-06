@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+motor
+pydantic
+python-dotenv
+
+# Windows-specific
+pywin32
+
+# For type hinting and dev tools (optional but recommended)
+mypy
+black
+isort
