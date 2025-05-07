@@ -51,10 +51,11 @@
 
   .scanalyzer-table {
     @apply w-full border-collapse;
+    table-layout: fixed;
   }
 
   .scanalyzer-table th {
-    @apply text-left py-3 px-4 bg-softGray text-gray-700 font-medium;
+    @apply text-left py-3 px-4 bg-softGray text-gray-700 font-medium sticky top-0 z-20;
   }
 
   .scanalyzer-table td {
@@ -63,6 +64,21 @@
 
   .scanalyzer-table tr:hover {
     @apply bg-softGray;
+  }
+
+  /* Ensure actions column stays visible */
+  .scanalyzer-table th:last-child,
+  .scanalyzer-table td:last-child {
+    position: sticky;
+    right: 0;
+    z-index: 10;
+    background-color: white;
+    box-shadow: -8px 0 8px -4px rgba(0,0,0,0.05);
+  }
+
+  /* Make sure the action buttons are properly spaced and visible */
+  .scanalyzer-table td:last-child .flex {
+    flex-wrap: nowrap;
   }
 
   .severity-normal {
@@ -83,5 +99,37 @@
 
   .card-gradient {
     @apply bg-gradient-to-br from-white to-softGray;
+  }
+}
+
+/* Responsive table adjustments */
+@media (max-width: 768px) {
+  .scanalyzer-table th, 
+  .scanalyzer-table td {
+    @apply py-2 px-2 text-xs;
+  }
+
+  .scanalyzer-table {
+    @apply min-w-[800px];
+  }
+  
+  /* Ensure spacing is tighter on mobile */
+  .scanalyzer-table td:last-child .flex {
+    @apply space-x-0;
+  }
+  
+  .scanalyzer-table td:last-child .flex button {
+    @apply px-1;
+  }
+}
+
+/* Make buttons more compact on small screens */
+@media (max-width: 640px) {
+  .scanalyzer-table td:last-child .flex button {
+    @apply p-1 h-7 w-7;
+  }
+  
+  .scanalyzer-table td:last-child .flex button svg {
+    @apply h-3 w-3;
   }
 }

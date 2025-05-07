@@ -114,7 +114,7 @@ class LogDAO:
         return [LogEntry(**doc) async for doc in cursor]
 
     @staticmethod
-    async def get_all_logs(skip: int = 0, limit: int = 100) -> List[LogEntry]:
+    async def get_all_logs(skip: int = 0, limit: int = 300) -> List[LogEntry]:
         cursor = (
             log_collection
             .find()

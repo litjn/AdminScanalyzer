@@ -1,8 +1,7 @@
-
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
-import api from '@/lib/api';
+import { logsApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -34,17 +33,29 @@ const LogDetail = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (id) {
+    if (id && id !== 'undefined') {
       fetchLogDetail(id);
+    } else {
+      setError(new Error("Invalid log ID"));
+      setIsLoading(false);
+      toast({
+        title: "Error",
+        description: "Invalid log ID. Cannot fetch log details.",
+        variant: "destructive",
+      });
     }
   }, [id]);
 
   const fetchLogDetail = (logId: string) => {
     setIsLoading(true);
-    api.get<RawLogEntry>(`/logs/${logId}`)
+    logsApi.getLogById(logId)
       .then(response => {
-        setLog(transformLog(response.data));
-        setError(null);
+        if (response.data) {
+          setLog(transformLog(response.data));
+          setError(null);
+        } else {
+          throw new Error("Log data is empty");
+        }
       })
       .catch(error => {
         console.error('Failed to fetch log detail:', error);
@@ -61,9 +72,16 @@ const LogDetail = () => {
   };
 
   const handleUpdateLog = (data: Partial<LogEntry>) => {
-    if (!id) return;
+    if (!id || id === 'undefined' || !log) {
+      toast({
+        title: "Error",
+        description: "Cannot update log: invalid log ID.",
+        variant: "destructive",
+      });
+      return;
+    }
     
-    api.put(`/logs/${id}`, data)
+    logsApi.updateLog(id, data)
       .then(() => {
         setLog(prev => prev ? { ...prev, ...data } : null);
         toast({
@@ -82,10 +100,17 @@ const LogDetail = () => {
   };
 
   const handleDeleteLog = () => {
-    if (!id) return;
+    if (!id || id === 'undefined') {
+      toast({
+        title: "Error",
+        description: "Cannot delete log: invalid log ID.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     if (window.confirm('Are you sure you want to delete this log?')) {
-      api.delete(`/logs/${id}`)
+      logsApi.deleteLog(id)
         .then(() => {
           toast({
             title: "Success",

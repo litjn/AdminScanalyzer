@@ -23,7 +23,7 @@ export interface LogEntry extends Omit<RawLogEntry, 'timestamp'> {
   id: string;
 }
 
-export type LogClassification = "normal" | "suspicious" | "anomaly" | "critical";
+export type LogClassification = "normal" | "suspicious" | "anomaly" | "critical" | "all";
 
 export interface LogFilter {
   id?: string;
@@ -33,9 +33,8 @@ export interface LogFilter {
   provider?: string;
   event_host?: string;
   level?: string;
-  startDate?: Date;
-  endDate?: Date;
-  classification?: LogClassification;
+  date?: Date;
+  classification?: LogClassification | undefined;
   alert?: boolean;
   trigger?: boolean;
   searchText?: string;

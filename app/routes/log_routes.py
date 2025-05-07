@@ -5,7 +5,7 @@
 # -------------------------------------------------------------------------
 from typing import List, Optional, Union
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Header
 from app.dao.log_dao        import LogDAO
 from app.models.log_model   import LogEntry
 from app.models.log_update_model import LogUpdate
@@ -13,6 +13,16 @@ from app.models.log_update_model import LogUpdate
 router = APIRouter(prefix="/logs", tags=["Logs"])
 
 # ──────────── Get ────────────────────────────────────────────────────────
+@router.get("/ping", summary="Connection test endpoint for agents")
+async def ping(x_api_key: str = Header(...)):
+    """
+    Lightweight ping endpoint for agent connectivity test.
+    Returns 200 OK if API key is valid.
+    """
+    if x_api_key != "123123123":
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    return {"status": "ok"}
+
 
 @router.get("/{log_id}", response_model=LogEntry, summary="Get a specific log by ID")
 async def read_log(log_id: str):
@@ -29,7 +39,7 @@ async def get_logs(
     channel:  Optional[str] = None,
     level:    Optional[str] = None,
     skip: int = Query(0,  ge=0,  description="Number of logs to skip"),
-    limit: int = Query(100, ge=1, le=1000, description="Maximum logs to return"),
+    limit: int = Query(300, ge=1, le=1000, description="Maximum logs to return"),
 ):
     """
     Return logs.
@@ -48,7 +58,7 @@ async def create_log(log: LogEntry):
 
 
 @router.post("/ingest", status_code=201, summary="Ingest one log from a user agent")
-async def ingest_one(log: LogEntry):
+async def ingest_one(log: LogEntry, x_api_key: str = Header(...)):
     """
     Endpoint hit by the **user agent** when it posts **one** event.
 
@@ -56,6 +66,7 @@ async def ingest_one(log: LogEntry):
     return HTTP 201 so the agent advances its cursor.*
     """
     try:
+
         await LogDAO.add_log(log)
         return {"status": "log stored (or duplicate ignored)"}
     except Exception as exc:

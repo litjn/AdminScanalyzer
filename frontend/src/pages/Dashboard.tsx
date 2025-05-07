@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Link } from 'react-router-dom';
@@ -77,15 +76,12 @@ const Dashboard = () => {
     }, new Map<string, number>())
   ).map(([name, value]) => ({ name, value }));
 
-  const channelData = Array.from(
-    logs.reduce((acc, log) => {
-      const channel = log.channel || 'Unknown';
-      acc.set(channel, (acc.get(channel) || 0) + 1);
-      return acc;
-    }, new Map<string, number>())
-  ).map(([name, value]) => ({ name, value }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 5);
+  // Updated to ensure all three channels are displayed
+  const allChannels = ['Security', 'System', 'Application'];
+  const channelData = allChannels.map(channel => {
+    const count = logs.filter(log => log.channel === channel).length;
+    return { name: channel, value: count };
+  });
 
   const COLORS = ['#4c00b0', '#6d28d9', '#8b5cf6', '#a78bfa', '#c4b5fd'];
 
@@ -191,7 +187,7 @@ const Dashboard = () => {
           <CardHeader>
             <CardTitle className="flex items-center">
               <BarChart4 className="h-5 w-5 mr-2 text-primary" />
-              Top Channels
+              Channels
             </CardTitle>
           </CardHeader>
           <CardContent>

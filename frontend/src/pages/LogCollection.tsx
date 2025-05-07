@@ -1,125 +1,81 @@
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import api from '@/lib/api';
-import { RawLogEntry, LogEntry, LogFilter as LogFilterType } from '@/types/logs';
-import { transformLog, filterLogs } from '@/lib/logUtils';
-import LogTable from '@/components/LogTable';
+import { LogFilter as LogFilterType } from '@/types/logs';
+import { useLogs } from '@/hooks/use-logs';
 import LogFilter from '@/components/LogFilter';
+import LogTable from '@/components/LogTable';
+import { exportLogsToCSV } from '@/utils/exportUtils';
+import { 
+  Pagination, 
+  PaginationContent, 
+  PaginationItem, 
+  PaginationNext, 
+  PaginationPrevious
+} from "@/components/ui/pagination";
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const LogCollection = () => {
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [filteredLogs, setFilteredLogs] = useState<LogEntry[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const [page, setPage] = useState(1);
+  const pageSize = 100; // Default page size from API
+  const [activeFilters, setActiveFilters] = useState<LogFilterType>({});
   const { toast } = useToast();
 
-  useEffect(() => {
-    fetchLogs();
-  }, []);
-
-  const fetchLogs = () => {
-    setIsLoading(true);
-    api.get<RawLogEntry[]>('/logs')
-      .then(response => {
-        const logsData = Array.isArray(response.data) 
-          ? response.data.map(transformLog)
-          : [];
-        setLogs(logsData);
-        setFilteredLogs(logsData);
-        setError(null);
-      })
-      .catch(error => {
-        console.error('Failed to fetch logs:', error);
-        setError(error);
-        toast({
-          title: "Error",
-          description: "Failed to fetch logs. Please try again.",
-          variant: "destructive",
-        });
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
-  };
-
-  const handleUpdateLog = (id: string, data: Partial<LogEntry>) => {
-    api.put(`/logs/${id}`, data)
-      .then(() => {
-        setLogs(prev => prev.map(log => 
-          log.id === id ? { ...log, ...data } : log
-        ));
-        setFilteredLogs(prev => prev.map(log => 
-          log.id === id ? { ...log, ...data } : log
-        ));
-        toast({
-          title: "Success",
-          description: "Log updated successfully.",
-        });
-      })
-      .catch(error => {
-        console.error('Failed to update log:', error);
-        toast({
-          title: "Error",
-          description: "Failed to update log. Please try again.",
-          variant: "destructive",
-        });
-      });
-  };
+  // Use our custom hook to handle log fetching and filtering
+  const {
+    filteredLogs,
+    isLoading,
+    error,
+    total,
+    hasMore,
+    updateLog
+  } = useLogs(page, pageSize, activeFilters);
 
   const handleFilterChange = (filters: LogFilterType) => {
-    const filtered = filterLogs(logs, filters);
-    setFilteredLogs(filtered);
+    // Store the new filters
+    setActiveFilters(filters);
+    
+    // Reset to the first page when filters change
+    if (page !== 1) {
+      setPage(1);
+    }
   };
 
   const handleExport = () => {
-    // Create CSV content
-    let csvContent = "data:text/csv;charset=utf-8,";
+    const result = exportLogsToCSV(filteredLogs);
     
-    // Add headers
-    csvContent += "ID,Timestamp,Level,Channel,Event ID,Provider,Message,Alert,Trigger,Classification\n";
-    
-    // Add log data
-    filteredLogs.forEach(log => {
-      const row = [
-        log.id,
-        log.timestamp.toISOString(),
-        log.level,
-        log.channel,
-        log.event_id,
-        log.provider,
-        `"${log.message.join(' ').replace(/"/g, '""')}"`,
-        log.alert ? 'Yes' : 'No',
-        log.trigger ? 'Yes' : 'No',
-        log.ai_classification || 'Unclassified'
-      ];
-      csvContent += row.join(',') + "\n";
-    });
-    
-    // Create download link
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `scanalyzer_logs_${new Date().toISOString().slice(0,10)}.csv`);
-    document.body.appendChild(link);
-    
-    // Download CSV file
-    link.click();
-    document.body.removeChild(link);
-    
-    toast({
-      title: "Export Complete",
-      description: `${filteredLogs.length} logs exported to CSV.`
-    });
+    if (result.success) {
+      toast({
+        title: "Export Complete",
+        description: result.message
+      });
+    } else {
+      toast({
+        title: "Export Error",
+        description: result.message,
+        variant: "destructive"
+      });
+    }
+  };
+
+  const goToNextPage = () => {
+    if (hasMore) {
+      setPage(prev => prev + 1);
+    }
+  };
+
+  const goToPrevPage = () => {
+    if (page > 1) {
+      setPage(prev => prev - 1);
+    }
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Log Collection</h1>
-        <p className="text-gray-600">
-          Browse, filter, and analyze security logs from across your environment.
-        </p>
+    <div className="container mx-auto px-4 py-8 max-w-full">
+      <div className="mb-4">
+        <h1 className="text-2xl font-bold">Log Collection</h1>
+        <p className="text-muted-foreground">Browse, filter, and analyze security logs from across your environment.</p>
       </div>
       
       <LogFilter 
@@ -134,14 +90,97 @@ const LogCollection = () => {
         </div>
       ) : (
         <div className="bg-white rounded-lg shadow-sm border">
-          <div className="p-4 border-b flex justify-between items-center">
-            <h2 className="text-lg font-medium">Logs ({filteredLogs.length})</h2>
+          <div className="p-4 border-b flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+            <h2 className="text-lg font-medium">Logs ({filteredLogs.length} of {total})</h2>
+            
+            {/* Pagination Controls - Top */}
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={goToPrevPage} 
+                    disabled={page <= 1}
+                    className="flex items-center gap-1"
+                  >
+                    Previous
+                  </Button>
+                </PaginationItem>
+                <PaginationItem>
+                  <span className="px-2 py-1 rounded bg-muted min-w-[40px] text-center">{page}</span>
+                </PaginationItem>
+                <PaginationItem>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={goToNextPage} 
+                    disabled={!hasMore}
+                    className="flex items-center gap-1"
+                  >
+                    Next
+                  </Button>
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
           </div>
-          <LogTable 
-            logs={filteredLogs} 
-            isLoading={isLoading} 
-            onUpdateLog={handleUpdateLog}
-          />
+          
+          {/* Table container with vertical and horizontal scroll */}
+          <div className="relative">
+            <ScrollArea className="h-[calc(100vh-320px)] min-h-[400px]">
+              {isLoading ? (
+                <div className="flex justify-center items-center p-8 h-64">
+                  Loading logs...
+                </div>
+              ) : filteredLogs.length === 0 ? (
+                <div className="flex justify-center items-center p-8 h-64 text-muted-foreground">
+                  No logs found matching the current filters.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <LogTable 
+                    logs={filteredLogs}
+                    isLoading={isLoading}
+                    onUpdateLog={updateLog}
+                    showActions={true}
+                  />
+                </div>
+              )}
+            </ScrollArea>
+          </div>
+          
+          {/* Bottom pagination */}
+          <div className="p-4 border-t flex justify-center">
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={goToPrevPage} 
+                    disabled={page <= 1}
+                    className="flex items-center gap-1"
+                  >
+                    Previous
+                  </Button>
+                </PaginationItem>
+                <PaginationItem>
+                  <span className="px-2 py-1 rounded bg-muted min-w-[40px] text-center">{page}</span>
+                </PaginationItem>
+                <PaginationItem>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={goToNextPage} 
+                    disabled={!hasMore}
+                    className="flex items-center gap-1"
+                  >
+                    Next
+                  </Button>
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
         </div>
       )}
     </div>

@@ -18,7 +18,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Label } from '@/components/ui/label';
 import { LogFilter as LogFilterType } from '@/types/logs';
 import { format } from 'date-fns';
-import { CalendarIcon, Filter as FilterIcon, Download } from 'lucide-react';
+import { CalendarIcon, Filter, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface LogFilterProps {
@@ -32,8 +32,7 @@ const LogFilter = ({ onFilterChange, onExport, className }: LogFilterProps) => {
     searchText: '',
     level: undefined,
     channel: '',
-    startDate: undefined,
-    endDate: undefined,
+    date: undefined,
     classification: undefined,
     alert: undefined,
     trigger: undefined,
@@ -55,8 +54,7 @@ const LogFilter = ({ onFilterChange, onExport, className }: LogFilterProps) => {
       searchText: '',
       level: undefined,
       channel: '',
-      startDate: undefined,
-      endDate: undefined,
+      date: undefined,
       classification: undefined,
       alert: undefined,
       trigger: undefined,
@@ -111,7 +109,6 @@ const LogFilter = ({ onFilterChange, onExport, className }: LogFilterProps) => {
                 <SelectValue placeholder="Select channel" />
               </SelectTrigger>
               <SelectContent>
-                {/* Fixed: Changed empty string to "all" */}
                 <SelectItem value="all">All Channels</SelectItem>
                 <SelectItem value="Security">Security</SelectItem>
                 <SelectItem value="System">System</SelectItem>
@@ -142,9 +139,9 @@ const LogFilter = ({ onFilterChange, onExport, className }: LogFilterProps) => {
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Date Range Filters */}
+          {/* Single Date Filter */}
           <div>
-            <Label>Start Date</Label>
+            <Label>Log Date</Label>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -152,46 +149,18 @@ const LogFilter = ({ onFilterChange, onExport, className }: LogFilterProps) => {
                   className="w-full justify-start text-left font-normal"
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
-                  {filters.startDate ? (
-                    format(filters.startDate, "PPP")
+                  {filters.date ? (
+                    format(filters.date, "PPP")
                   ) : (
-                    <span>Start date</span>
+                    <span>Select date</span>
                   )}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
                 <Calendar
                   mode="single"
-                  selected={filters.startDate}
-                  onSelect={(date) => handleFilterChange('startDate', date)}
-                  initialFocus
-                  className="p-3 pointer-events-auto"
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-          
-          <div>
-            <Label>End Date</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant={"outline"}
-                  className="w-full justify-start text-left font-normal"
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {filters.endDate ? (
-                    format(filters.endDate, "PPP")
-                  ) : (
-                    <span>End date</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={filters.endDate}
-                  onSelect={(date) => handleFilterChange('endDate', date)}
+                  selected={filters.date}
+                  onSelect={(date) => handleFilterChange('date', date)}
                   initialFocus
                   className="p-3 pointer-events-auto"
                 />
@@ -234,7 +203,7 @@ const LogFilter = ({ onFilterChange, onExport, className }: LogFilterProps) => {
             )}
             
             <Button onClick={applyFilters}>
-              <FilterIcon className="mr-2 h-4 w-4" /> Apply Filters
+              <Filter className="mr-2 h-4 w-4" /> Apply Filters
             </Button>
           </div>
         </div>
