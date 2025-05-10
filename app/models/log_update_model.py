@@ -8,3 +8,4 @@ class LogUpdate(BaseModel):
     alert:   Optional[bool]             = None
     ai_classification: Optional[str]    = None
     trigger: Optional[bool]             = None
+

@@ -13,7 +13,10 @@ from pymongo import DESCENDING
 from pymongo.errors import DuplicateKeyError, BulkWriteError
 
 from app.db.mongodb import log_collection                # type: AsyncIOMotorCollection
+from app.models.full_log import FullLogEntry
 from app.models.log_model import LogEntry
+from app.models.log_update_model import LogUpdate
+
 
 # ────────── Insert helpers ────────────────────────────────────────────────
 
@@ -24,13 +27,9 @@ class LogDAO:
 
     # ------------- single insert ------------------------------------------------
     @staticmethod
-    async def add_log(log: LogEntry) -> str | None:
+    async def add_log(log: FullLogEntry) -> str | None:
         """
-        Insert ONE log document.
-
-        Returns:
-            the _id if newly inserted
-            None       if duplicate (already exists)
+        Insert ONE enriched log document into MongoDB.
         """
         doc = log.dict(by_alias=True)
 
@@ -38,12 +37,12 @@ class LogDAO:
             await log_collection.insert_one(doc)
             return doc["_id"]
         except DuplicateKeyError:
-            # Duplicate is fine – user agent guarantees "exactly once"
+            # Duplicate is fine; it won't be re-inserted
             return None
 
     # ------------- bulk insert --------------------------------------------------
     @staticmethod
-    async def add_logs_bulk(logs: List[LogEntry]) -> int:
+    async def add_logs_bulk(logs: List[FullLogEntry]) -> int:
         """
         Insert MANY documents with `ordered=False` so duplicates are skipped.
 
@@ -81,9 +80,9 @@ class LogDAO:
     # ────────── Getters ────────────────────────────────────────────────────
 
     @staticmethod
-    async def get_log_by_id(log_id: str) -> Optional[LogEntry]:
+    async def get_log_by_id(log_id: str) -> Optional[FullLogEntry]:
         doc = await log_collection.find_one({"_id": log_id})
-        return LogEntry(**doc) if doc else None
+        return FullLogEntry(**doc) if doc else None
 
     @staticmethod
     async def get_logs_by_filter(
@@ -92,7 +91,7 @@ class LogDAO:
         level:    Optional[str] = None,
         skip: int = 0,
         limit: int = 100,
-    ) -> List[LogEntry]:
+    ) -> List[FullLogEntry]:
         """
         Flexible finder used by GET /logs.
         """
@@ -105,24 +104,32 @@ class LogDAO:
             query["level"] = level
 
         cursor = (
-            log_collection
-            .find(query)
+            log_collection.find(query)
             .sort("timestamp", DESCENDING)
             .skip(skip)
             .limit(limit)
         )
-        return [LogEntry(**doc) async for doc in cursor]
+        results = []
+        async for doc in cursor:
+            # Convert `_id` to string but don't remove the field
+            doc["_id"] = str(doc["_id"])
+            results.append(FullLogEntry(**doc))
+        return results
 
     @staticmethod
-    async def get_all_logs(skip: int = 0, limit: int = 300) -> List[LogEntry]:
+    async def get_all_logs(skip: int = 0, limit: int = 300) -> List[FullLogEntry]:
         cursor = (
-            log_collection
-            .find()
+            log_collection.find()
             .sort("timestamp", DESCENDING)
             .skip(skip)
             .limit(limit)
         )
-        return [LogEntry(**doc) async for doc in cursor]
+        results = []
+        async for doc in cursor:
+            # Convert `_id` to string but don't remove the field
+            doc["_id"] = str(doc["_id"])
+            results.append(FullLogEntry(**doc))
+        return results
 
 # --------------------------------------------------------------------------
 # Optional utility – quick vacuum for dev / tests

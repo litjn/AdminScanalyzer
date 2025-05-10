@@ -13,6 +13,7 @@ export interface RawLogEntry {
   level: string;
   level_code: number;
   message: string[];
+  description?: string;
   alert?: boolean;
   ai_classification?: "normal" | "suspicious" | "anomaly" | "critical" | null;
   trigger?: boolean;

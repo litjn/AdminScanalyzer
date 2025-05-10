@@ -193,6 +193,21 @@ const LogDetail = () => {
                       <p key={idx} className="text-sm whitespace-pre-wrap">{msg}</p>
                     ))}
                   </div>
+
+
+                  <Separator className={`mt-4`} />
+
+
+                  <div className="mt-4">
+                    <h3 className="text-sm font-medium text-gray-500">Event Description</h3>
+                    <div className="mt-1 bg-softGray p-4 rounded-md">
+                      <p key={0} className="text-sm whitespace-pre-wrap">
+                        <span>{log.description}</span>
+                      </p>
+                    </div>
+                  </div>
+
+
                 </div>
               </div>
             </CardContent>

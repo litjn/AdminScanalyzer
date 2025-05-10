@@ -90,7 +90,7 @@ const LogFilter = ({ onFilterChange, onExport, className }: LogFilterProps) => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Levels</SelectItem>
-                <SelectItem value="Information">Information</SelectItem>
+                <SelectItem value="Info">Information</SelectItem>
                 <SelectItem value="Warning">Warning</SelectItem>
                 <SelectItem value="Error">Error</SelectItem>
                 <SelectItem value="Critical">Critical</SelectItem>
