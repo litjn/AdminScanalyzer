@@ -18,5 +18,5 @@ class LogEntry(BaseModel):
     message: List[str]                    # rename msg ➜ message
 
 
-    class Config:
-        extra = "forbid"                  # unknown keys → 422
+    #class Config:
+        #extra = "forbid"                  # unknown keys → 422

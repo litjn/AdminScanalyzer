@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Query, Header
 from pydantic.v1 import ValidationError
 
 from app.dao.log_dao        import LogDAO
+
 from app.models.full_log import FullLogEntry
 from app.models.log_model   import LogEntry
 from app.models.log_update_model import LogUpdate
@@ -127,7 +128,7 @@ async def ingest_bulk(logs: List[LogEntry]):
 
     try:
         # Step 1: Convert LogEntry objects to dictionaries
-        raw_logs = [log.dict(by_alias=True) for log in logs]
+        raw_logs = [log.model_dump(by_alias=True) for log in logs]
 
         # Step 2: Process each log asynchronously
         enriched_logs = await asyncio.gather(
@@ -155,6 +156,13 @@ async def ingest_bulk(logs: List[LogEntry]):
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Bulk ingestion failed: {exc}")
 
+
+
+
+
+
+
+
 # ──────────── Put ────────────────────────────────────────────────────────
 
 @router.put("/{log_id}", summary="Update selected fields of a log")
@@ -162,7 +170,7 @@ async def update_log(log_id: str, changes: LogUpdate):
     """
     Allow limited edits (alert flags, AI classification, etc.).
     """
-    patch = changes.dict(exclude_unset=True, exclude_none=True)
+    patch = changes.model_dump(exclude_unset=True, exclude_none=True)
     if not patch:
         raise HTTPException(status_code=400, detail="Empty update payload")
     success = await LogDAO.update_log(log_id, patch)

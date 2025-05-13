@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import log_routes
+from app.api import log_routes, model_routes
 from app.api.stream_routes import stream_router
 
 #from fastapi.staticfiles import StaticFiles
@@ -25,7 +25,7 @@ app.add_middleware(
 
 app.include_router(log_routes.router)
 app.include_router(stream_router)
-
+app.include_router(model_routes.router)
 @app.get("/")
 async def root():
     return {"message": "FastAPI server running!"}
