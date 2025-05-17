@@ -1,22 +1,38 @@
-from pydantic import BaseModel, Field
+# ----------------------------------------------------------------------
+#  Schema for the **raw log** exactly as a user-agent POSTs it
+# ----------------------------------------------------------------------
+from __future__ import annotations
 from datetime import datetime
 from typing import List, Optional
 
+from pydantic import BaseModel, Field
+
+
+class WinEventData(BaseModel):
+    task_category: Optional[str] = None
+    keywords:       List[str]    = Field(default_factory=list)
+    opcode:         Optional[int] = None
+    process_id:     Optional[int] = None
+    logon_type:     Optional[str] = None
+    source_ip:      Optional[str] = None
+
 
 class LogEntry(BaseModel):
-    id: Optional[str] = Field(alias="_id")
-    agent_id: str                         # NEW ------------
-    record_id: int
-    timestamp: datetime
-    channel: str
-    event_id: int
-    provider: str  # rename source_name ➜ provider
-    event_host: str                       # rename computer  ➜ event_host
-    user_sid: Optional[str] = None
-    level: str
-    level_code: int                       # NEW ------------
-    message: List[str]                    # rename msg ➜ message
+    id:          Optional[str] = Field(alias="_id")          # alias => “_id”
+    agent_id:    str
+    record_id:   int
+    timestamp:   datetime
+    channel:     str
+    event_id:    int
+    provider:    str
+    event_host:  str
+    user_sid:    Optional[str] = None
+    level:       str
+    level_code:  int
+    message:     List[str]
+    win_event_data: WinEventData
 
-
-    #class Config:
-        #extra = "forbid"                  # unknown keys → 422
+    class Config:
+        validate_assignment = True
+        populate_by_name    = True        # accept _id OR id
+        extra               = "forbid"

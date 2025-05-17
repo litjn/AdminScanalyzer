@@ -1,23 +1,48 @@
-
+# ----------------------------------------------------------------------
+#  /model – standalone endpoints for testing / monitoring the classifier
+# ----------------------------------------------------------------------
+from __future__ import annotations
 import asyncio
+from typing import List
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Header, HTTPException
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
-from app.lstm_inference import predict_record
-from app.models.full_log import FullLogEntry
-from app.services.streamer import Streamer
-from app.utils.logger import setup_logger
+from app.services.openai_classifier import classify_log
 from app.models.log_model import LogEntry
-from app.lstm_inference import predict_record
 
-logger = setup_logger()
-router = APIRouter(prefix="/ml", tags=["ML"])
+router = APIRouter(prefix="/model", tags=["Model"])
+
+class ClassifyResponse(BaseModel):
+    classification: str
+    description:    str
+
+@router.post("/classify", response_model=ClassifyResponse)
+async def classify_endpoint(log: LogEntry):
+    """
+    Pure classifier endpoint – does **not** write to MongoDB.
+    Handy for unit-testing or monitoring accuracy.
+    """
+    try:
+        result = await asyncio.to_thread(classify_log, log.dict(by_alias=True))
+        return result
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
 
 
+@router.post("/classify/bulk", response_model=List[ClassifyResponse])
+async def classify_bulk(logs: List[LogEntry]):
+    """
+    Classify up to a few hundred logs in one shot.
+    Uses asyncio gather for throughput.
+    """
+    if not logs:
+        raise HTTPException(status_code=400, detail="Empty payload")
 
+    async def _one(lg):               # helper
+        return await asyncio.to_thread(classify_log, lg.dict(by_alias=True))
 
-@router.post("/classify", status_code=201, summary="Classify one log using AI model")
-def classify_log(log: LogEntry):
-
-    label = predict_record(log)  # _id preserved
-    return {"label": label}
+    try:
+        return await asyncio.gather(*(_one(l) for l in logs))
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=str(exc))

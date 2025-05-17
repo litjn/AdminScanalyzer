@@ -1,11 +1,13 @@
-from typing import Optional, List
+# ----------------------------------------------------------------------
+#  PATCH-style updates – user can flag or re-classify after review
+# ----------------------------------------------------------------------
+from typing import Optional
+
 from pydantic import BaseModel
 
 
 class LogUpdate(BaseModel):
-    # Discovered that in Pydantic v1 a field with Optional is still required unless given None as default value
-    level:   Optional[str]              = None
-    alert:   Optional[bool]             = None
-    ai_classification: Optional[str]    = None
-    trigger: Optional[bool]             = None
-
+    alert:            Optional[bool] = None
+    ai_classification: Optional[str] = None    # "normal"|"suspicious"|...
+    ai_description:    Optional[str] = None    # short explanation
+    trigger:           Optional[bool] = None

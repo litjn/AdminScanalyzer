@@ -4,17 +4,14 @@
 #  (No API‑Key handling yet – add later if you like)
 # -------------------------------------------------------------------------
 from typing import List, Optional
-
-from fastapi import APIRouter, HTTPException, Query, Header
+from fastapi import APIRouter, HTTPException, Query, Header, Request
 from pydantic.v1 import ValidationError
-
-from app.dao.log_dao        import LogDAO
-
+from app.dao.log_dao import LogDAO
 from app.models.full_log import FullLogEntry
-from app.models.log_model   import LogEntry
+from app.models.log_model import LogEntry
 from app.models.log_update_model import LogUpdate
-from app.services.log_processor import LogProcessor
-
+from app.services.log_processor import process
+import asyncio
 router = APIRouter(prefix="/logs", tags=["Logs"])
 
 # ──────────── Get ────────────────────────────────────────────────────────
@@ -66,97 +63,38 @@ async def create_log(log: FullLogEntry):
 @router.post("/ingest", status_code=202)
 async def ingest_log(log: LogEntry):
     """
-    Endpoint to ingest a single log entry, validate it, enrich it, and save it to the database.
+    1. Enrich with AI (class & description)
+    2. Validate → FullLogEntry
+    3. Save via DAO
     """
     try:
-        # Step 1: Validate the raw log sent by the user using LogEntry
-        raw_log = log.model_dump(by_alias=True)  # Converts LogEntry instance into a dictionary
-
-        # Step 2: Enrich the log using the LogProcessor
-        enriched_log_data = await LogProcessor.process(raw_log)
-
-        # Step 3: Validate the enriched log using FullLogEntry
-        final_log = FullLogEntry(**enriched_log_data)
-
-        # Step 4: Save the enriched and validated log to the database
-        saved_id = await LogDAO.add_log(final_log)
-
-        if saved_id is None:
-            # Duplicate log, but ingestion should still return 202
-            return {"status": "log stored (or duplicate ignored)"}
-
+        enriched   = await process(log.dict(by_alias=True))
+        final_log  = FullLogEntry(**enriched)
+        saved_id   = await LogDAO.add_log(final_log)
+        return {"status": "stored", "id": saved_id}
     except ValidationError as exc:
-        # Handle validation errors from Pydantic models
-        raise HTTPException(status_code=400, detail=f"Validation Error: {exc}")
-
+        raise HTTPException(400, detail=str(exc))
     except Exception as exc:
-        # Handle any unknown or unexpected errors
-        raise HTTPException(status_code=500, detail=f"Processing Error: {exc}")
+        raise HTTPException(500, detail=f"Processing error: {exc}")
 
-    return {"status": "log stored"}
-
-
-
-
-"""
-
-@router.post("/ingest", status_code=201, summary="Ingest one log from a user agent")
-async def ingest_one(log: LogEntry, x_api_key: str = Header(...)):
-   
-    #Endpoint hit by the **user agent** when it posts **one** event.
-
-    #*If the document already exists (duplicate _id) DAO will ignore and we still
-    #return HTTP 201 so the agent advances its cursor.*
-    
-    try:
-
-        await LogDAO.add_log(log)
-        return {"status": "log stored (or duplicate ignored)"}
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Ingestion failed: {exc}")
-"""
-import asyncio
-
-@router.post("/ingest/bulk", status_code=201, summary="Ingest many logs in a single request")
+# ------------------------- /logs/ingest/bulk ------------------------------
+@router.post("/ingest/bulk", status_code=201)
 async def ingest_bulk(logs: List[LogEntry]):
-    """
-    Bulk version – let the agent send 100‑500 docs at once for better throughput.
-    Each log is validated, enriched, and saved in bulk to the database.
-    """
     if not logs:
-        raise HTTPException(status_code=400, detail="Empty payload")
+        raise HTTPException(400, detail="Empty payload")
+
+    async def _enrich(lg):
+        enriched = await process(lg.dict(by_alias=True))
+        return FullLogEntry(**enriched)
 
     try:
-        # Step 1: Convert LogEntry objects to dictionaries
-        raw_logs = [log.model_dump(by_alias=True) for log in logs]
-
-        # Step 2: Process each log asynchronously
-        enriched_logs = await asyncio.gather(
-            *(LogProcessor.process(log) for log in raw_logs)  # Concurrent processing
-        )
-
-        # Step 3: Validate each enriched log using FullLogEntry
-        validated_logs = []
-        for enriched_log in enriched_logs:
-            try:
-                validated_logs.append(FullLogEntry(**enriched_log))
-            except ValidationError as exc:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Validation Error in one of the logs: {exc}",
-                )
-
-        # Step 4: Save validated logs to the database using DAO
-        inserted = await LogDAO.add_logs_bulk(validated_logs)
-
+        full_docs = await asyncio.gather(*(_enrich(l) for l in logs))
+        inserted  = await LogDAO.add_logs_bulk(full_docs)
         return {"status": "bulk stored", "inserted": inserted}
-
     except ValidationError as exc:
-        raise HTTPException(status_code=400, detail=f"Validation Error: {exc}")
+        raise HTTPException(400, detail=str(exc))
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Bulk ingestion failed: {exc}")
-
-
+        raise HTTPException(500, detail=f"Bulk ingestion failed: {exc}")
 
 
 

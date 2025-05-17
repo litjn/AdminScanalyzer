@@ -1,22 +1,47 @@
-# app/services/log_processor
-from app.models.full_log import FullLogEntry
-from app.utils.event_mapper import get_event_description
+"""
+Enrich a raw LogEntry with:
+  • OpenAI classification + short reason
+  • human-readable event-ID description
+  • alert / trigger flags
+Returns a dict ready for FullLogEntry(**dict).
+"""
+from __future__ import annotations
+from typing import Dict
 
-#Add the ML Classifier Import first
+import asyncio
+from pydantic import ValidationError
 
-class LogProcessor:
-    @staticmethod
-    async def process(log_data: dict) -> dict:
-        """
-        Enrich the log without discarding existing data.
-        """
-        # Simulated enrichment process
-        enriched_data = {
-            "description": get_event_description(log_data["event_id"]),
-            "ai_classification": "Normal",  # Example AI classification
-            "alert": False,                # Example alert logic
-            "trigger": False,              # Example trigger logic
-        }
+from app.models.log_model import LogEntry
+from app.services.openai_classifier import classify_log           # ← our wrapper
+from app.utils.event_mapper import get_event_description          # keeps your map
 
-        # Return the merged log data
-        return {**log_data, **enriched_data}
+# ─────── Configurable knobs ────────────────────────────────────────────────
+ALERT_CLASSES   = {"critical", "anomaly"}       # tweak as you like
+DEFAULT_TRIGGER = False
+
+
+async def process(log_data: Dict) -> Dict:
+    """
+    Validate → call OpenAI in a background thread → merge enrichment.
+    Raises ValidationError on bad input, propagates other errors upward.
+    """
+    # 1) pydantic validation (fast, non-blocking)
+    try:
+        raw = LogEntry(**log_data)        # may raise ValidationError
+    except ValidationError as exc:
+        raise
+
+    # 2) GPT-4o-mini classification (blocking ⇒ offload)
+    ai = await asyncio.to_thread(classify_log, raw.dict(by_alias=True))
+    # ai == {"classification": "...", "description": "..."}
+
+    # 3) domain-specific enrichment
+    enriched: Dict = {
+        **raw.dict(by_alias=True),                  # validated original
+        "event_description": get_event_description(raw.event_id),
+        "ai_classification": ai["classification"],
+        "ai_description":    ai["description"],
+        "alert":             ai["classification"] in ALERT_CLASSES,
+        "trigger":           DEFAULT_TRIGGER,
+    }
+    return enriched

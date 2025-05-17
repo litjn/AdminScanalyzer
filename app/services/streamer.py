@@ -1,51 +1,73 @@
-from typing import List
+# ----------------------------------------------------------------------
+#  Central hub for live WebSocket broadcasting
+# ----------------------------------------------------------------------
+from __future__ import annotations
+from typing import List, Dict, Any
+import json, asyncio
 
+from fastapi.encoders import jsonable_encoder
 from starlette.websockets import WebSocket
 
-from app.services.log_processor import LogProcessor
-import app.utils.logger as logger
-import json
-from fastapi.encoders import jsonable_encoder
+from app.services.log_processor import process
+from app.utils.logger import setup_logger
 
-logger = logger.setup_logger()
+logger = setup_logger()
+
+
 class Streamer:
+    """
+    • keeps track of connected clients
+    • allows pause / resume
+    • enriches raw logs with AI on demand
+    """
 
-    def __init__(self):
-        self.active_connections: List[WebSocket] = []
-        self.log_processor = LogProcessor()
-        self.is_paused = False
+    def __init__(self) -> None:
+        self.active: List[WebSocket] = []
+        self.is_paused: bool = False
 
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-        logger.info("WebSocket client connected.")
+    # ───── WebSocket connection management ────────────────────────────
+    async def connect(self, ws: WebSocket):
+        await ws.accept()
+        self.active.append(ws)
+        logger.info("WebSocket client connected")
 
-    async def disconnect(self, websocket: WebSocket):
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
-            logger.info("WebSocket client disconnected.")
+    async def disconnect(self, ws: WebSocket):
+        if ws in self.active:
+            self.active.remove(ws)
+            logger.info("WebSocket client disconnected")
 
-    async def broadcast(self, message: dict):
+    # ───── Processing & broadcasting ──────────────────────────────────
+    async def enrich(self, raw_log: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Broadcast a message to all active WebSocket clients.
+        Call the OpenAI-powered processor *in a worker thread*.
         """
-        inactive_connections = []
-        for conn in self.active_connections:
+        return await process(raw_log)
+
+    async def broadcast(self, message: Dict[str, Any]):
+        """
+        Send message to every active client unless stream is paused.
+        Cleans up broken connections automatically.
+        """
+        if self.is_paused:
+            return
+
+        dead: list[WebSocket] = []
+        payload = jsonable_encoder(message)     # datetime → ISO 8601, etc.
+
+        for ws in self.active:
             try:
-                # Convert the message dict, including any `datetime`, into JSON-friendly format
-                serialized_message = jsonable_encoder(message)
-                await conn.send_json(serialized_message)
-            except Exception as e:
-                logger.error(f"Failed to send message: {e}")
-                inactive_connections.append(conn)
+                await ws.send_json(payload)
+            except Exception as exc:
+                logger.error(f"WebSocket send failed: {exc}")
+                dead.append(ws)
 
-    # Cleanup inactive/disconnected connections
-        for conn in inactive_connections:
-            await self.disconnect(conn)
+        for ws in dead:
+            await self.disconnect(ws)
 
-    def is_stream_active(self):
-        return not self.is_paused
-
+    # ───── external control ───────────────────────────────────────────
     async def toggle_pause(self, pause: bool):
         self.is_paused = pause
-        logger.info(f"Stream {'paused' if pause else 'resumed'}.")
+        logger.info(f"Stream {'paused' if pause else 'resumed'}")
+
+    def is_streaming(self) -> bool:
+        return not self.is_paused

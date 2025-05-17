@@ -1,57 +1,64 @@
+# ----------------------------------------------------------------------
+#  /streamer – realtime log pipeline (no DB writes)
+# ----------------------------------------------------------------------
+from __future__ import annotations
 import asyncio
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Header, HTTPException
+from app.models.log_model import LogEntry
 from app.services.streamer import Streamer
 from app.utils.logger import setup_logger
-from app.models.log_model import LogEntry
 
 logger = setup_logger()
 stream_router = APIRouter(prefix="/streamer", tags=["Streamer"])
 
+# simple API-key guard (replace with proper auth when ready)
+API_KEY = "123123123"
+
 streamer = Streamer()
 
+# ──────────────────────────────────────────────────────────────────────
 @stream_router.get("/ping")
-async def ping(x_api_key: str = Header(...)):  # Add header validation
-    if x_api_key != "123123123":
-        raise HTTPException(status_code=401, detail="Invalid API key")
+async def ping(x_api_key: str = Header(...)):
+    if x_api_key != API_KEY:
+        raise HTTPException(401, detail="Invalid API key")
     return {"status": "streamer ready"}
 
-@stream_router.post("/ingest", summary="Send log to streamer for broadcast only")
+# ----------------------------------------------------------------------
+@stream_router.post("/ingest", summary="Process & broadcast a single log (no DB write)")
 async def ingest_streamed_log(log: LogEntry, x_api_key: str = Header(...)):
-    """
-    Agent sends a single log here. It's processed, then broadcasted (not saved).
-    """
+    if x_api_key != API_KEY:
+        raise HTTPException(401, detail="Invalid API key")
 
-    if x_api_key != "123123123":
-        raise HTTPException(status_code=401, detail="Invalid API key")
+    raw = log.model_dump(by_alias=True)
     try:
-        raw_log = log.model_dump(by_alias=True)
-        enriched_log = await streamer.log_processor.process(raw_log)
-        logger.debug(f"Broadcasting log: {enriched_log}")
-        await streamer.broadcast(enriched_log)
+        enriched = await streamer.enrich(raw)
+        logger.debug(f"Broadcasting log: {enriched}")
+        await streamer.broadcast(enriched)
         return {"status": "broadcasted"}
-    except Exception as e:
-        logger.error(f"Stream ingest failed: {e}")
-        raise HTTPException(status_code=500, detail="Streaming ingestion failed")
+    except Exception as exc:
+        logger.error(f"Stream ingest failed: {exc}")
+        raise HTTPException(500, detail="Streaming ingestion failed")
 
+# ----------------------------------------------------------------------
 @stream_router.websocket("/logs/stream")
-async def log_stream(websocket: WebSocket):
-    await streamer.connect(websocket)
+async def log_stream(ws: WebSocket):
+    await streamer.connect(ws)
     try:
         while True:
-            # Handle incoming control messages (e.g., pause/resume)
+            # listen for control messages while still allowing broadcasts
             try:
-                data = await asyncio.wait_for(websocket.receive_json(), timeout=1.0)
-                action = data.get("action")
-                if action == "pause":
-                    await streamer.toggle_pause(True)
-                elif action == "resume":
-                    await streamer.toggle_pause(False)
+                data = await asyncio.wait_for(ws.receive_json(), timeout=1.0)
+                match data.get("action"):
+                    case "pause":
+                        await streamer.toggle_pause(True)
+                    case "resume":
+                        await streamer.toggle_pause(False)
             except asyncio.TimeoutError:
-                # Timeout allows the loop to continue and check for broadcasts
+                # timeout just keeps the loop alive
                 continue
     except WebSocketDisconnect:
-        await streamer.disconnect(websocket)
-    except Exception as e:
-        logger.error(f"WebSocket error: {e}")
-        await streamer.disconnect(websocket)
+        await streamer.disconnect(ws)
+    except Exception as exc:
+        logger.error(f"WebSocket error: {exc}")
+        await streamer.disconnect(ws)
