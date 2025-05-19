@@ -1,7 +1,6 @@
 # app/api/log_routes.py
 # -------------------------------------------------------------------------
 #  Scanalyzer ‑ Admin side – Log api
-#  (No API‑Key handling yet – add later if you like)
 # -------------------------------------------------------------------------
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query, Header, Request
@@ -11,8 +10,11 @@ from app.models.full_log import FullLogEntry
 from app.models.log_model import LogEntry
 from app.models.log_update_model import LogUpdate
 from app.services.log_processor import process
+from app.services.pipeline import LogHandler
 import asyncio
 router = APIRouter(prefix="/logs", tags=["Logs"])
+log_handler = LogHandler()  # Instantiate pipeline handler
+
 
 # ──────────── Get ────────────────────────────────────────────────────────
 @router.get("/ping", summary="Connection test endpoint for agents")
@@ -59,46 +61,39 @@ async def create_log(log: FullLogEntry):
 
 
 
-# --- Custom API for the NEW Functionality, I should have stored the original code before operating like this, but it is what it is
-@router.post("/ingest", status_code=202)
+@router.post("/ingest", summary="Ingest a single log")
 async def ingest_log(log: LogEntry):
     """
-    1. Enrich with AI (class & description)
-    2. Validate → FullLogEntry
-    3. Save via DAO
+    Ingest a single log for processing.
     """
     try:
-        enriched   = await process(log.dict(by_alias=True))
-        final_log  = FullLogEntry(**enriched)
-        saved_id   = await LogDAO.add_log(final_log)
-        return {"status": "stored", "id": saved_id}
+        # Enrich the log with the pipeline while ensuring it's of type LogEntry
+        enriched = await log_handler.handle(log.dict(by_alias=True), save=True)
+        return {"status": "stored", "log": enriched}
     except ValidationError as exc:
-        raise HTTPException(400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
-        raise HTTPException(500, detail=f"Processing error: {exc}")
+        raise HTTPException(status_code=500, detail=f"Processing error: {exc}")
+
+    return jsonable_encoder(enriched)
+
 
 # ------------------------- /logs/ingest/bulk ------------------------------
-@router.post("/ingest/bulk", status_code=201)
+@router.post("/ingest/bulk", summary="Ingest multiple logs")
 async def ingest_bulk(logs: List[LogEntry]):
+    """
+    Bulk ingestion of logs.
+    """
     if not logs:
-        raise HTTPException(400, detail="Empty payload")
-
-    async def _enrich(lg):
-        enriched = await process(lg.dict(by_alias=True))
-        return FullLogEntry(**enriched)
+        raise HTTPException(status_code=400, detail="Empty payload")
 
     try:
-        full_docs = await asyncio.gather(*(_enrich(l) for l in logs))
-        inserted  = await LogDAO.add_logs_bulk(full_docs)
-        return {"status": "bulk stored", "inserted": inserted}
+        enriched_logs = [await log_handler.handle(log.dict(by_alias=True), save=True) for log in logs]
+        return {"status": "bulk stored", "logs": enriched_logs}
     except ValidationError as exc:
-        raise HTTPException(400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
-        raise HTTPException(500, detail=f"Bulk ingestion failed: {exc}")
-
-
-
-
+        raise HTTPException(status_code=500, detail="Bulk ingestion failed")
 
 
 # ──────────── Put ────────────────────────────────────────────────────────

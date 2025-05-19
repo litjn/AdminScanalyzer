@@ -14,6 +14,8 @@ from pydantic import ValidationError
 from app.models.log_model import LogEntry
 from app.services.openai_classifier import classify_log           # ← our wrapper
 from app.utils.event_mapper import get_event_description          # keeps your map
+from app.services.alert_mailer import dispatch_alert
+
 
 # ─────── Configurable knobs ────────────────────────────────────────────────
 ALERT_CLASSES   = {"critical", "anomaly"}       # tweak as you like
@@ -44,4 +46,7 @@ async def process(log_data: Dict) -> Dict:
         "alert":             ai["classification"] in ALERT_CLASSES,
         "trigger":           DEFAULT_TRIGGER,
     }
+    if enriched["alert"]:
+        await dispatch_alert(enriched)
+
     return enriched

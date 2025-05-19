@@ -10,3 +10,4 @@ DB_NAME = "ScanalyzerDB"
 client = AsyncIOMotorClient(MONGO_URI)
 database = client[DB_NAME]
 log_collection = database.get_collection("logs")
+credentials_collection = database.get_collection("credentials")

@@ -71,3 +71,8 @@ class Streamer:
 
     def is_streaming(self) -> bool:
         return not self.is_paused
+
+# ======================================================================
+#  Create one global instance that everyone can import
+# ======================================================================
+streamer = Streamer()            #  ← add this line

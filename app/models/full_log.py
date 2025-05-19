@@ -24,6 +24,7 @@ class FullLogEntry(BaseModel):
     level_code:  int
     message:     List[str]
     win_event_data: WinEventData
+    event_description: str
 
     # ───── AI-added fields ────────────────────────────────────────────
     ai_classification: str                     # required after enrichment

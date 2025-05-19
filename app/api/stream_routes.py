@@ -6,7 +6,7 @@ import asyncio
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Header, HTTPException
 from app.models.log_model import LogEntry
-from app.services.streamer import Streamer
+from app.services.streamer import streamer
 from app.utils.logger import setup_logger
 
 logger = setup_logger()
@@ -15,7 +15,6 @@ stream_router = APIRouter(prefix="/streamer", tags=["Streamer"])
 # simple API-key guard (replace with proper auth when ready)
 API_KEY = "123123123"
 
-streamer = Streamer()
 
 # ──────────────────────────────────────────────────────────────────────
 @stream_router.get("/ping")
