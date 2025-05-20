@@ -1,29 +1,20 @@
 # ────────────────────────────────────────────────────────────────────────
-#  app/models/log_model.py   (RAW log as sent by agent)
+#  app/models/win_event_data.py
 # ────────────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
-from datetime import datetime
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
-from .win_event_data import WinEventData
+class WinEventData(BaseModel):
+    """Nested structure inside every Windows Event Log."""
 
-class LogEntry(BaseModel):
-    """Incoming log **before** enrichment/classification."""
+    task_category: Optional[str] = None
+    keywords: List[str] = Field(default_factory=list)
+    opcode: Optional[int] = None
+    process_id: Optional[int] = None
+    logon_type: Optional[str] = None
+    source_ip: Optional[str] = None
 
-    id: Optional[str] = Field(alias="_id")
-    agent_id: str
-    record_id: int
-    timestamp: datetime
-    channel: str
-    event_id: int
-    provider: str
-    event_host: str
-    user_sid: Optional[str] = None
-    level: str
-    level_code: int
-    message: List[str]
-    win_event_data: WinEventData
-
-__all__ = ["LogEntry"]
+# Export list so `from win_event_data import WinEventData` works nicely.
+__all__ = ["WinEventData"]

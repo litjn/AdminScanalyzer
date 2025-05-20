@@ -1,37 +1,22 @@
-# ----------------------------------------------------------------------
-#  Fully-enriched document that is stored & streamed
-# ----------------------------------------------------------------------
+
+# ────────────────────────────────────────────────────────────────────────
+#  app/models/full_log.py    (Enriched + stored)
+# ────────────────────────────────────────────────────────────────────────
+
 from __future__ import annotations
-from datetime import datetime
-from typing import List, Optional
+from typing import Literal
+from pydantic import Field
 
-from pydantic import BaseModel, Field
+from .log_model import LogEntry
 
-from app.models.log_model import WinEventData
+_CLASS_LABEL = Literal["normal", "suspicious", "anomaly", "critical"]
 
+class FullLogEntry(LogEntry):
+    """Log after pipeline enrichment; stored in Mongo & broadcast."""
 
-class FullLogEntry(BaseModel):
-    id:          Optional[str] = Field(alias="_id")
-    agent_id:    str
-    record_id:   int
-    timestamp:   datetime
-    channel:     str
-    event_id:    int
-    provider:    str
-    event_host:  str
-    user_sid:    Optional[str] = None
-    level:       str
-    level_code:  int
-    message:     List[str]
-    win_event_data: WinEventData
     event_description: str
+    ai_classification: _CLASS_LABEL
+    ai_description: str
+    alert: bool = False
 
-    # ───── AI-added fields ────────────────────────────────────────────
-    ai_classification: str                     # required after enrichment
-    ai_description:    str
-    alert:             Optional[bool] = False  # human toggle
-    trigger:           Optional[bool] = False  # human toggle
-
-    class Config:
-        populate_by_name = True
-        extra = "forbid"
+__all__ = ["FullLogEntry"]

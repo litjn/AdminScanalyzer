@@ -1,30 +1,35 @@
-import logging
+# ────────────────────────────────────────────────────────────────────────
+#  🔸 app/utils/logger.py
+# ────────────────────────────────────────────────────────────────────────
 
-def setup_logger(debug: bool = False):
+"""Project‑wide logger factory – avoids duplicate handlers."""
+from __future__ import annotations
+
+import logging
+from typing import Optional
+
+
+def setup_logger(name: str = "Scanalyzer", *, debug: bool = False) -> logging.Logger:  # noqa: D401
+    """Return a module‑level logger with a single console handler.
+
+    Call this at module scope once per file:
+    >>> logger = setup_logger(__name__)
+    """
+
     log_level = logging.DEBUG if debug else logging.INFO
 
-    logger = logging.getLogger("Scanalyzer")
+    logger = logging.getLogger(name)
     logger.setLevel(log_level)
 
-    # 🧹 Clean existing handlers to avoid duplicates
-    if logger.hasHandlers():
+    # Clean existing handlers only for our named logger, not root
+    if logger.handlers:
         logger.handlers.clear()
 
-    # Add new console handler
     handler = logging.StreamHandler()
-    formatter = logging.Formatter("[%(levelname)s] %(message)s")
-    handler.setFormatter(formatter)
+    handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
     logger.addHandler(handler)
 
-    # 🚫 Prevent bubbling up to root logger
-    logger.propagate = False
-
-    # Optionally: hook Uvicorn logs into same handler
-    for name in ("uvicorn.access", "uvicorn.error"):
-        uvicorn_logger = logging.getLogger(name)
-        uvicorn_logger.handlers.clear()
-        uvicorn_logger.addHandler(handler)
-        uvicorn_logger.setLevel(log_level)
-        uvicorn_logger.propagate = False
-
+    logger.propagate = False  # keep root logger quiet
     return logger
+
+__all__ = ["setup_logger"]

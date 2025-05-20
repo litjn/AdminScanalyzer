@@ -1,13 +1,18 @@
-fastapi
-uvicorn
-motor
-pydantic
-python-dotenv
+# ── Core runtime ───────────────────────────────────────────────────────
+fastapi>=0.110
+uvicorn[standard]>=0.29        # reload & production workers
+motor>=3.4                     # async MongoDB driver
+python-dotenv>=1.0             # load .env
+pydantic>=2.6                  # data validation
+openai>=1.14                   # GPT calls
+aiosmtplib>=3.0                # async SMTP for alert emails
+backoff>=2.2                   # retry decorator for OpenAI
 
-# Windows-specific
-pywin32
+# ── Optional / platform-specific (comment out if not needed) ───────────
+# pywin32                        # only if you still run Windows-specific scripts
 
-# For type hinting and dev tools (optional but recommended)
-mypy
-black
-isort
+# ── Dev / lint / formatting (optional) ─────────────────────────────────
+# black
+# isort
+# mypy
+# ruff

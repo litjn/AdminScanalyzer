@@ -1,61 +1,67 @@
-# ----------------------------------------------------------------------
-#  /streamer – realtime log pipeline (no DB writes)
-# ----------------------------------------------------------------------
+# ────────────────────────────────────────────────────────────────────────
+#  Streamer routes (app/api/streamer_routes.py)
+# ────────────────────────────────────────────────────────────────────────
 from __future__ import annotations
-import asyncio
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Header, HTTPException
+import asyncio
+from typing import Any
+
+from fastapi import APIRouter, Header, HTTPException, WebSocket, WebSocketDisconnect, status
+
 from app.models.log_model import LogEntry
 from app.services.streamer import streamer
 from app.utils.logger import setup_logger
 
+router_stream = APIRouter(prefix="/streamer", tags=["Streamer"])
 logger = setup_logger()
-stream_router = APIRouter(prefix="/streamer", tags=["Streamer"])
 
-# simple API-key guard (replace with proper auth when ready)
-API_KEY = "123123123"
+API_KEY_STREAM = "123123123"  # TODO replace with real auth
 
 
-# ──────────────────────────────────────────────────────────────────────
-@stream_router.get("/ping")
-async def ping(x_api_key: str = Header(...)):
-    if x_api_key != API_KEY:
-        raise HTTPException(401, detail="Invalid API key")
+# ────────── Helpers -----------------------------------------------------
+
+def _check_key(key: str) -> None:
+    if key != API_KEY_STREAM:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+
+
+# ────────── Routes ------------------------------------------------------
+
+@router_stream.get("/ping")
+async def ping_stream(x_api_key: str = Header(...)):
+    _check_key(x_api_key)
     return {"status": "streamer ready"}
 
-# ----------------------------------------------------------------------
-@stream_router.post("/ingest", summary="Process & broadcast a single log (no DB write)")
-async def ingest_streamed_log(log: LogEntry, x_api_key: str = Header(...)):
-    if x_api_key != API_KEY:
-        raise HTTPException(401, detail="Invalid API key")
 
-    raw = log.model_dump(by_alias=True)
+@router_stream.post("/ingest", summary="Process + broadcast a single log (no DB write)")
+async def ingest_streamed_log(log: LogEntry, x_api_key: str = Header(...)):
+    _check_key(x_api_key)
+    raw = log.dict(by_alias=True)
+
     try:
         enriched = await streamer.enrich(raw)
-        logger.debug(f"Broadcasting log: {enriched}")
+        logger.debug("Broadcasting log", extra={"log": enriched})
         await streamer.broadcast(enriched)
         return {"status": "broadcasted"}
     except Exception as exc:
         logger.error(f"Stream ingest failed: {exc}")
         raise HTTPException(500, detail="Streaming ingestion failed")
 
-# ----------------------------------------------------------------------
-@stream_router.websocket("/logs/stream")
+
+@router_stream.websocket("/logs/stream")
 async def log_stream(ws: WebSocket):
     await streamer.connect(ws)
     try:
         while True:
-            # listen for control messages while still allowing broadcasts
             try:
-                data = await asyncio.wait_for(ws.receive_json(), timeout=1.0)
+                data: Any = await asyncio.wait_for(ws.receive_json(), timeout=1.0)
                 match data.get("action"):
                     case "pause":
                         await streamer.toggle_pause(True)
                     case "resume":
                         await streamer.toggle_pause(False)
             except asyncio.TimeoutError:
-                # timeout just keeps the loop alive
-                continue
+                continue  # keep loop alive so broadcast tasks run
     except WebSocketDisconnect:
         await streamer.disconnect(ws)
     except Exception as exc:

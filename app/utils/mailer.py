@@ -1,80 +1,99 @@
-import os, aiosmtplib, json, html
-from email.message import EmailMessage
+# ────────────────────────────────────────────────────────────────────────
+#  🔸 app/utils/mailer.py
+# ────────────────────────────────────────────────────────────────────────
+
+"""Async SMTP helper + reusable HTML builders for alerts & explanations."""
+from __future__ import annotations
+
+import html
+import json
+import os
 from datetime import datetime
+from email.message import EmailMessage
 
-SMTP_HOST = os.getenv("SMTP_HOST",  "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER = os.getenv("SMTP_USER")
-SMTP_PASS = os.getenv("SMTP_PASS")
+import aiosmtplib
+
+# ── Configuration via env vars -----------------------------------------
+SMTP_HOST: str = os.getenv("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER: str | None = os.getenv("SMTP_USER")
+SMTP_PASS: str | None = os.getenv("SMTP_PASS")
+
+if not SMTP_USER or not SMTP_PASS:
+    raise RuntimeError("SMTP_USER / SMTP_PASS must be set in environment")
 
 
-def _build_html(log_doc: dict, suggestion: str | None) -> str:
-    sev  = log_doc.get("ai_classification", "unknown")
-    clr  = {"critical": "#e74c3c", "anomaly": "#e67e22",
-            "suspicious": "#f1c40f", "normal": "#2ecc71"}.get(sev, "#95a5a6")
+# ── Shared helpers ------------------------------------------------------
 
-    # escape everything that might contain <>&
-    esc  = lambda s: html.escape(str(s))
+def _escape(text: object) -> str:  # noqa: D401
+    return html.escape(str(text))
+
+
+# ── Alert layout --------------------------------------------------------
+
+def build_html_alert(log_doc: dict, suggestion: str | None) -> str:  # noqa: D401
+    """Colour‑coded HTML card for alert e‑mails."""
+    sev = log_doc.get("ai_classification", "unknown")
+    clr = {
+        "critical": "#e74c3c",
+        "anomaly": "#e67e22",
+        "suspicious": "#f1c40f",
+        "normal": "#2ecc71",
+    }.get(sev, "#95a5a6")
+
     rows = "".join(
-        f"<tr><th>{k}</th><td>{esc(v)}</td></tr>"
+        f"<tr><th>{k}</th><td>{_escape(v)}</td></tr>"
         for k, v in [
-            ("Time",      esc(log_doc['timestamp'])),
-            ("Host",      log_doc.get('event_host')),
-            ("Event ID",  log_doc['event_id']),
-            ("User SID",  log_doc.get('user_sid', 'N/A')),
-            ("Desc",      log_doc.get('event_description', '')),
-            ("GPT hint",  suggestion or "—"),
+            ("Time", log_doc.get("timestamp")),
+            ("Host", log_doc.get("event_host")),
+            ("Event ID", log_doc.get("event_id")),
+            ("User SID", log_doc.get("user_sid", "N/A")),
+            ("Desc", log_doc.get("event_description", "")),
+            ("GPT hint", suggestion or "—"),
         ]
     )
 
-    prettified_json = html.escape(json.dumps(log_doc, indent=2, default=str))
+    prettified_json = _escape(json.dumps(log_doc, indent=2, default=str))
 
     return f"""
-    <html>
-    <body style="font-family:Segoe UI,Helvetica,Arial,sans-serif;
-                 background:#fafafa;padding:1rem 0;">
-      <center>
-      <table style="max-width:640px;width:90%;background:#fff;
-                    border:1px solid #ddd;border-radius:6px;padding:0 24px;">
-        <tr>
-          <td style="padding:24px 0 10px 0;">
-            <h2 style="margin:0;
-                       color:{clr};text-transform:uppercase;">{sev}</h2>
-            <p style="margin:4px 0 20px 0;font-size:14px;
-                      color:#555;">Scanalyzer Alert &nbsp;•&nbsp;
-                      {datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")}</p>
-          </td>
-        </tr>
-        <tr><td>
-          <table style="width:100%;font-size:14px;border-collapse:collapse;">
-            {rows}
-          </table>
-        </td></tr>
-        <tr><td style="padding:16px 0 24px 0;">
-          <pre style="background:#f6f8fa;border:1px solid #eee;
-                       border-radius:4px;padding:12px;font-size:12px;
-                       overflow-x:auto;">{prettified_json}</pre>
-        </td></tr>
-      </table>
-      </center>
-    </body>
-    </html>
-    """
+    <html><body style="font-family:Segoe UI,Helvetica,Arial,sans-serif;background:#fafafa;padding:1rem 0;">
+    <center><table style="max-width:640px;width:90%;background:#fff;border:1px solid #ddd;border-radius:6px;padding:0 24px;">
+      <tr><td style="padding:24px 0 10px 0;"><h2 style="margin:0;color:{clr};text-transform:uppercase;">{sev}</h2>
+          <p style="margin:4px 0 20px 0;font-size:14px;color:#555;">Scanalyzer Alert • {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}</p>
+      </td></tr>
+      <tr><td><table style="width:100%;font-size:14px;border-collapse:collapse;">{rows}</table></td></tr>
+      <tr><td style="padding:16px 0 24px 0;"><pre style="background:#f6f8fa;border:1px solid #eee;border-radius:4px;padding:12px;font-size:12px;overflow-x:auto;">{prettified_json}</pre></td></tr>
+    </table></center></body></html>"""
 
 
-async def send_mail(to_addr: str, subject: str,
-                    plain_body: str, html_body: str | None = None) -> None:
+# ── GPT explanation layout --------------------------------------------
+
+def build_html_explanation(result: dict) -> str:  # noqa: D401
+    actions_html = "".join(f"<li>{_escape(act)}</li>" for act in result.get("actions", []))
+    return f"""
+    <html><body style="font-family:Segoe UI,Helvetica,Arial,sans-serif;background:#fafafa;padding:1rem 0;">
+    <center><table style="max-width:640px;width:90%;background:#fff;border:1px solid #ddd;border-radius:6px;padding:0 24px;">
+      <tr><td style="padding:24px 0 10px 0;"><h2 style="margin:0;color:#3498db;">GPT Log Explanation</h2>
+          <p style="margin:4px 0 20px 0;font-size:14px;color:#555;">{datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}</p>
+      </td></tr>
+      <tr><td style="font-size:14px;"><strong>Summary</strong><br/>{_escape(result.get('summary', '—'))}</td></tr>
+      <tr><td style="padding-top:12px;font-size:14px;"><strong>Impact</strong><br/>{_escape(result.get('impact', '—'))}</td></tr>
+      <tr><td style="padding-top:12px;font-size:14px;"><strong>Recommended Actions</strong><ul style="margin:6px 0 0 18px;">{actions_html}</ul></td></tr>
+      <tr><td style="padding:20px 0 24px 0;font-size:12px;color:#999;">Generated by Scanalyzer GPT assistant</td></tr>
+    </table></center></body></html>"""
+
+
+# ── SMTP sender ---------------------------------------------------------
+
+async def send_mail(to_addr: str, subject: str, plain: str, html_alt: str | None = None) -> None:  # noqa: D401
+    """Send multi‑part e‑mail via SMTP/STARTTLS."""
     msg = EmailMessage()
     msg["From"] = SMTP_USER
-    msg["To"]   = to_addr
+    msg["To"] = to_addr
     msg["Subject"] = subject
-
-    # 1) plain-text part
-    msg.set_content(plain_body)
-
-    # 2) HTML alternative (most clients will render this)
-    if html_body:
-        msg.add_alternative(html_body, subtype="html")
+    msg.set_content(plain)
+    if html_alt:
+        msg.add_alternative(html_alt, subtype="html")
 
     await aiosmtplib.send(
         msg,
@@ -84,3 +103,9 @@ async def send_mail(to_addr: str, subject: str,
         username=SMTP_USER,
         password=SMTP_PASS,
     )
+
+__all__ = [
+    "send_mail",
+    "build_html_alert",
+    "build_html_explanation",
+]

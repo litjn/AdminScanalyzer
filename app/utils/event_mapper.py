@@ -1,4 +1,18 @@
-EVENT_ID_TO_DESCRIPTION = {
+# ────────────────────────────────────────────────────────────────────────
+#  🔸 app/utils/event_mapper.py  (kept as‑is, but documented)
+# ────────────────────────────────────────────────────────────────────────
+
+"""Maps Windows `event_id` → human‑readable description.
+
+The dict is long but pure data, so we leave the body untouched for
+readability. If you ever need to slim the in‑memory footprint, consider
+loading it from a JSON file at startup.
+"""
+from __future__ import annotations
+
+
+
+EVENT_ID_TO_DESCRIPTION: dict[int, str] = {
     1101: "Audit events have been dropped by the transport.",
     1102: "The audit log was cleared",
     1104: "The security Log is now full",
@@ -610,5 +624,9 @@ EVENT_ID_TO_DESCRIPTION = {
 
 }
 
-def get_event_description(event_id: int) -> str:
+def get_event_description(event_id: int) -> str:  # noqa: D401
+    """Return a short description or "Unknown Event" if not mapped."""
     return EVENT_ID_TO_DESCRIPTION.get(event_id, "Unknown Event")
+
+__all__ = ["get_event_description"]
+
